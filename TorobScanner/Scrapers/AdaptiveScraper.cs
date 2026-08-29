@@ -61,7 +61,9 @@ public class AdaptiveScraper : ISiteScraper
                 cancellationToken.ThrowIfCancellationRequested();
 
                 // ✅ محافظ حلقه بی‌نهایت: URL تکراری → خاتمه
-                var normalizedUrl = currentUrl.Split('#')[0].Split('?')[0];
+                // ⚠️ فقط fragment (#) حذف می‌شود — query string باید بماند وگرنه
+                // صفحه‌بندی ?paged=2 با صفحه ۱ یکسان تلقی و اسکن بعد از صفحه اول قطع می‌شد
+                var normalizedUrl = currentUrl.Split('#')[0].TrimEnd('/');
                 if (!seenPageUrls.Add(normalizedUrl)) break;
 
                 pageCount++;

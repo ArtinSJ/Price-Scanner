@@ -76,13 +76,25 @@ public class ManagementWindow : Window
         var delProdsBtn = new Button { Content = "⚠️ حذف محصولات دسته", Height = 32, Margin = new Thickness(0, 10, 0, 0), Background = new SolidColorBrush(Color.FromArgb(30, 255, 165, 0)), Foreground = Brushes.White, Cursor = System.Windows.Input.Cursors.Hand };
         leftPanel.Children.Add(delProdsBtn);
 
+        // ═══ بخش بروزرسانی برنامه ═══
+        leftPanel.Children.Add(new Separator { Margin = new Thickness(0, 20, 0, 10), Background = new SolidColorBrush(Color.FromArgb(30, 255, 255, 255)) });
+        leftPanel.Children.Add(new TextBlock { Text = $"نسخه برنامه: {Services.UpdateService.CurrentVersion()}", Foreground = new SolidColorBrush(Color.FromRgb(100, 110, 130)), FontSize = 11, Margin = new Thickness(0, 0, 0, 8) });
+        var updateAppBtn = new Button { Content = "⬇️ بررسی بروزرسانی برنامه", ToolTip = "دانلود و نصب خودکار آخرین نسخه از گیت‌هاب", Height = 34, Background = new SolidColorBrush(Color.FromArgb(30, 0, 240, 255)), Foreground = new SolidColorBrush(Color.FromRgb(0, 240, 255)), BorderBrush = new SolidColorBrush(Color.FromArgb(60, 0, 240, 255)), BorderThickness = new Thickness(1), Cursor = System.Windows.Input.Cursors.Hand };
+        updateAppBtn.Click += (s, e) => {
+            if (_isBusy) { MessageBox.Show(this, "ابتدا عملیات جاری را متوقف کنید."); return; }
+            var win = new UpdateWindow { Owner = this };
+            win.ShowDialog();
+        };
+        leftPanel.Children.Add(updateAppBtn);
+
         mainGrid.Children.Add(leftPanel);
         Grid.SetRow(leftPanel, 1);
 
         var rightPanel = new StackPanel { Margin = new Thickness(15, 20, 0, 0) };
 
         var actionsStack = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0,0,0,10) };
-        var addLinkBtn = new Button { Content = "➕ افزودن لینک", Height = 32, Padding = new Thickness(10,0,10,0), Background = new SolidColorBrush(Color.FromArgb(30, 0, 240, 255)), Foreground = Brushes.White, Cursor = System.Windows.Input.Cursors.Hand, Margin = new Thickness(0,0,10,0) };
+        // ✅ تغییر: افزودن لینک محصول از ترب «یا هر سایت دیگر» — نه فقط ترب
+        var addLinkBtn = new Button { Content = "➕ افزودن لینک", ToolTip = "افزودن لینک محصول از ترب یا سایت‌های دیگر", Height = 32, Padding = new Thickness(10,0,10,0), Background = new SolidColorBrush(Color.FromArgb(30, 0, 240, 255)), Foreground = Brushes.White, Cursor = System.Windows.Input.Cursors.Hand, Margin = new Thickness(0,0,10,0) };
         var updateAllBtn = new Button { Content = "🔄 آپدیت کل لیست", Height = 32, Padding = new Thickness(10,0,10,0), Background = new SolidColorBrush(Color.FromArgb(30, 0, 255, 127)), Foreground = Brushes.White, Cursor = System.Windows.Input.Cursors.Hand, Margin = new Thickness(0,0,10,0) };
 
         _catFilterCombo = new ComboBox { Width = 150, Height = 32 };

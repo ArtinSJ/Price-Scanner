@@ -315,10 +315,16 @@ public static class ExtractorScripts
         }
         try {
             let url = new URL(window.location.href);
-            let page = url.searchParams.get('paged') || url.searchParams.get('page');
-            if (page) {
-                url.searchParams.set('paged', parseInt(page) + 1);
-                return url.toString();
+            // ✅ رفع باگ: پارامتر صحیح (paged یا page) افزایش می‌یابد — قبلاً همیشه paged
+            //    نوشته می‌شد و سایت‌های ?page=N در صفحه اول گیر می‌کردند
+            let pagedParam = url.searchParams.has('paged') ? 'paged'
+                           : (url.searchParams.has('page') ? 'page' : null);
+            if (pagedParam) {
+                let page = parseInt(url.searchParams.get(pagedParam));
+                if (!isNaN(page)) {
+                    url.searchParams.set(pagedParam, page + 1);
+                    return url.toString();
+                }
             }
             let match = url.pathname.match(/page\/(\d+)\/?$/);
             if (match) return url.origin + url.pathname.replace(/page\/\d+\/?$/, 'page/' + (parseInt(match[1]) + 1) + '/') + (url.search || '');

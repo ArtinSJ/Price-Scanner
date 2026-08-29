@@ -43,7 +43,10 @@ public class TorobProductScraper
                 await _semaphore.WaitAsync(ct);
                 try
                 {
-                    if ((DateTime.Now - product.LastUpdate).TotalHours < 6 &&
+                    // ✅ کش فقط برای محصولی که «قبلاً قیمت گرفته» معتبر است؛
+                    // محصول تازه‌وارد (LastPrice=0) همیشه اسکن می‌شود — حتی اگر LastUpdate تازه باشد
+                    if (product.LastPrice > 0 &&
+                        (DateTime.Now - product.LastUpdate).TotalHours < 6 &&
                         product.ProductName != "محصول جدید")
                     {
                         Interlocked.Increment(ref current);
@@ -53,11 +56,18 @@ public class TorobProductScraper
 
                     progress?.Report((current, total, $"در حال بررسی: {product.ProductName}"));
 
+                    decimal price; string store, title;
+                    // ✅ رفع نشت منابع: context حتی در صورت خطا بسته می‌شود
                     var context = await BrowserLauncher.CreateContextAsync(browser);
-                    var page = await context.NewPageAsync();
-
-                    var (price, store, title) = await ScrapeProductPage(page, product.TorobUrl);
-                    await page.CloseAsync();
+                    try
+                    {
+                        var page = await context.NewPageAsync();
+                        (price, store, title) = await ScrapeProductPage(page, product.TorobUrl);
+                    }
+                    finally
+                    {
+                        try { await context.CloseAsync(); } catch { }
+                    }
 
                     if (price > 0)
                     {

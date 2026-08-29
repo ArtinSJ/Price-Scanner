@@ -166,6 +166,9 @@ public class DatabaseManager
     /// <summary>
     /// ✅ رفع باگ ۷: PreviousPrice فقط وقتی قیمت واقعاً تغییر کند بازنویسی می‌شود؛
     /// بعد از هر اسکن مجدد، نشانگر «افزایش/کاهش» پاک نمی‌شود.
+    /// ✅ رفع باگ جدید (v2.3): Import مجدد یک لینک موجود، قیمت و اسم واقعی را نابود نمی‌کند —
+    ///    قیمت ۰ ورودی هرگز قیمت معتبر قبلی را بازنویسی نمی‌کند و
+    ///    اسم placeholder («محصول جدید») اسم واقعی موجود را پاک نمی‌کند.
     /// </summary>
     public void SaveProduct(SavedProduct product)
     {
@@ -175,9 +178,20 @@ public class DatabaseManager
             INSERT INTO SavedProducts (ProductName, TorobUrl, CategoryName, LastPrice, StoreName, PreviousPrice, LastUpdate, CreatedAt)
             VALUES (@ProductName, @TorobUrl, @CategoryName, @LastPrice, @StoreName, @PreviousPrice, @LastUpdate, @CreatedAt)
             ON CONFLICT(TorobUrl) DO UPDATE SET
-                ProductName=@ProductName, CategoryName=@CategoryName,
-                PreviousPrice=CASE WHEN LastPrice != @LastPrice THEN LastPrice ELSE PreviousPrice END,
-                LastPrice=@LastPrice, StoreName=@StoreName, LastUpdate=@LastUpdate";
+                ProductName=CASE
+                    WHEN (@ProductName = '' OR @ProductName = 'محصول جدید')
+                         AND ProductName != '' THEN ProductName
+                    ELSE @ProductName END,
+                CategoryName=@CategoryName,
+                PreviousPrice=CASE
+                    WHEN @LastPrice > 0 AND LastPrice > 0 AND LastPrice != @LastPrice THEN LastPrice
+                    ELSE PreviousPrice END,
+                LastPrice=CASE WHEN @LastPrice > 0 THEN @LastPrice ELSE LastPrice END,
+                StoreName=CASE
+                    WHEN (@StoreName = '' OR @StoreName = 'نامشخص')
+                         AND StoreName != '' THEN StoreName
+                    ELSE @StoreName END,
+                LastUpdate=CASE WHEN @LastPrice > 0 THEN @LastUpdate ELSE LastUpdate END";
         using var cmd = new SqliteCommand(query, connection);
         cmd.Parameters.AddWithValue("@ProductName", product.ProductName ?? "");
         cmd.Parameters.AddWithValue("@TorobUrl", product.TorobUrl ?? "");
