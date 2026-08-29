@@ -1,0 +1,44 @@
+# ═══════════════════════════════════════════════════════════════
+#  انتشار خودکار Release — موتور بروزرسانی داخل برنامه از این تغذیه می‌شود
+#
+#  نحوه انتشار نسخه جدید:
+#    1) عدد <Version> در TorobScanner.csproj را بالا ببرید (مثلاً 2.5.0)
+#    2) کامیت + تگ:  git tag v2.5.0 && git push origin v2.5.0
+#    3) این workflow خودش build می‌گیرد و zip را در Releases می‌گذارد
+#    4) کاربران از داخل برنامه (تنظیمات → بررسی بروزرسانی) آپدیت می‌گیرند
+# ═══════════════════════════════════════════════════════════════
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 9
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Publish (framework-dependent, win-x64)
+        run: dotnet publish TorobScanner/TorobScanner.csproj -c Release -r win-x64 --self-contained false -o publish
+
+      - name: Zip artifact
+        shell: pwsh
+        run: Compress-Archive -Path publish\* -DestinationPath "TorobScanner_${{ github.ref_name }}_win-x64.zip"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "Torob Intelligence ${{ github.ref_name }}"
+          generate_release_notes: true
+          files: TorobScanner_${{ github.ref_name }}_win-x64.zip
