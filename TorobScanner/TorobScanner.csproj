@@ -11,9 +11,9 @@
     <AssemblyTitle>Torob Intelligence Pro</AssemblyTitle>
     <!-- ⚠️ نسخه برنامه — موتور بروزرسانی خودکار این را با تگ Release گیت‌هاب مقایسه می‌کند.
          برای انتشار نسخه جدید: این عدد را بالا ببرید + تگ vX.Y.Z بزنید (GitHub Actions بقیه را انجام می‌دهد) -->
-    <Version>2.4.0</Version>
-    <AssemblyVersion>2.4.0</AssemblyVersion>
-    <FileVersion>2.4.0</FileVersion>
+    <Version>2.4.1</Version>
+    <AssemblyVersion>2.4.1</AssemblyVersion>
+    <FileVersion>2.4.1</FileVersion>
     <Product>Torob Intelligence Pro</Product>
   </PropertyGroup>
 
