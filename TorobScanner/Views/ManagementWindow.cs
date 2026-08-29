@@ -82,7 +82,8 @@ public class ManagementWindow : Window
         var rightPanel = new StackPanel { Margin = new Thickness(15, 20, 0, 0) };
 
         var actionsStack = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0,0,0,10) };
-        var addLinkBtn = new Button { Content = "➕ افزودن لینک", Height = 32, Padding = new Thickness(10,0,10,0), Background = new SolidColorBrush(Color.FromArgb(30, 0, 240, 255)), Foreground = Brushes.White, Cursor = System.Windows.Input.Cursors.Hand, Margin = new Thickness(0,0,10,0) };
+        // ✅ تغییر: افزودن لینک محصول از ترب «یا هر سایت دیگر» — نه فقط ترب
+        var addLinkBtn = new Button { Content = "➕ افزودن لینک", ToolTip = "افزودن لینک محصول از ترب یا سایت‌های دیگر", Height = 32, Padding = new Thickness(10,0,10,0), Background = new SolidColorBrush(Color.FromArgb(30, 0, 240, 255)), Foreground = Brushes.White, Cursor = System.Windows.Input.Cursors.Hand, Margin = new Thickness(0,0,10,0) };
         var updateAllBtn = new Button { Content = "🔄 آپدیت کل لیست", Height = 32, Padding = new Thickness(10,0,10,0), Background = new SolidColorBrush(Color.FromArgb(30, 0, 255, 127)), Foreground = Brushes.White, Cursor = System.Windows.Input.Cursors.Hand, Margin = new Thickness(0,0,10,0) };
 
         _catFilterCombo = new ComboBox { Width = 150, Height = 32 };
