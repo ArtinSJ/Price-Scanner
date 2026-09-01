@@ -1,0 +1,75 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- ═══════════════════════════════════════════════════════════════
+         ✨ LuxPalette — پالت پیش‌فرض «پلاتینیوم گلس» (v2.7)
+         این فایل فقط پالت رنگ است؛ استایل‌های کنترلی در LuxTheme.xaml
+         به این کلیدها DynamicResource دارند.
+         ThemeService هنگام تعویض تم، همین دیکشنری را با پالت تم
+         انتخابی (ساخته‌شده در کد) جایگزین می‌کند → کل UI بدون
+         ری‌استارت، زنده رنگ عوض می‌شود.
+         ═══════════════════════════════════════════════════════════════ -->
+
+    <!-- ─── رنگ‌ها ─── -->
+    <Color x:Key="LuxBgAColor">#0B0D12</Color>
+    <Color x:Key="LuxBgBColor">#11141B</Color>
+    <Color x:Key="LuxBgCColor">#0D1016</Color>
+    <Color x:Key="LuxTextPrimaryColor">#F3F6FB</Color>
+    <Color x:Key="LuxTextSecondaryColor">#A9B2C1</Color>
+    <Color x:Key="LuxTextDimColor">#6E7889</Color>
+    <Color x:Key="LuxPlatinumColor">#F4F7FB</Color>
+    <Color x:Key="LuxAccentColor">#8FB8FF</Color>
+    <Color x:Key="LuxSuccessColor">#71E6A8</Color>
+    <Color x:Key="LuxDangerColor">#FF9191</Color>
+    <Color x:Key="LuxWarningColor">#FFCB7D</Color>
+
+    <!-- ─── براش‌ها ─── -->
+    <SolidColorBrush x:Key="LuxTextPrimary" Color="{StaticResource LuxTextPrimaryColor}"/>
+    <SolidColorBrush x:Key="LuxTextSecondary" Color="{StaticResource LuxTextSecondaryColor}"/>
+    <SolidColorBrush x:Key="LuxTextDim" Color="{StaticResource LuxTextDimColor}"/>
+    <SolidColorBrush x:Key="LuxPlatinum" Color="{StaticResource LuxPlatinumColor}"/>
+    <SolidColorBrush x:Key="LuxAccent" Color="{StaticResource LuxAccentColor}"/>
+    <SolidColorBrush x:Key="LuxSuccess" Color="{StaticResource LuxSuccessColor}"/>
+    <SolidColorBrush x:Key="LuxDanger" Color="{StaticResource LuxDangerColor}"/>
+    <SolidColorBrush x:Key="LuxWarning" Color="{StaticResource LuxWarningColor}"/>
+
+    <!-- شیشه‌ها (مستقل از تم — روی هر پس‌زمینه‌ی تیره‌ای کار می‌کنند) -->
+    <SolidColorBrush x:Key="LuxGlassFill" Color="#12FFFFFF"/>
+    <SolidColorBrush x:Key="LuxGlassFillStrong" Color="#1AFFFFFF"/>
+    <SolidColorBrush x:Key="LuxGlassStroke" Color="#22FFFFFF"/>
+    <SolidColorBrush x:Key="LuxGlassStrokeSoft" Color="#16FFFFFF"/>
+    <SolidColorBrush x:Key="LuxFocusStroke" Color="#738FB8FF"/>
+
+    <!-- ─── گرادیان‌ها ─── -->
+    <LinearGradientBrush x:Key="LuxWindowBg" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Color="{StaticResource LuxBgAColor}" Offset="0"/>
+        <GradientStop Color="{StaticResource LuxBgBColor}" Offset="0.55"/>
+        <GradientStop Color="{StaticResource LuxBgCColor}" Offset="1"/>
+    </LinearGradientBrush>
+
+    <LinearGradientBrush x:Key="LuxIridescent" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Color="#A9C7FF" Offset="0"/>
+        <GradientStop Color="#D8C6FF" Offset="0.52"/>
+        <GradientStop Color="#F1D9FF" Offset="1"/>
+    </LinearGradientBrush>
+
+    <LinearGradientBrush x:Key="LuxPlatinumMetal" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Color="#F8FAFD" Offset="0"/>
+        <GradientStop Color="#DDE4EE" Offset="0.5"/>
+        <GradientStop Color="#C9D3E1" Offset="1"/>
+    </LinearGradientBrush>
+
+    <RadialGradientBrush x:Key="LuxNebulaBlue">
+        <GradientStop Color="#265B7DB8" Offset="0"/>
+        <GradientStop Color="#005B7DB8" Offset="1"/>
+    </RadialGradientBrush>
+
+    <RadialGradientBrush x:Key="LuxNebulaLavender">
+        <GradientStop Color="#2B8E7CC3" Offset="0"/>
+        <GradientStop Color="#008E7CC3" Offset="1"/>
+    </RadialGradientBrush>
+
+    <!-- سایه‌های مشترک (فقط روی عناصر کم‌تعداد — پرفورمنس) -->
+    <DropShadowEffect x:Key="LuxShadowDialog" BlurRadius="34" ShadowDepth="0" Color="#C0000000" Opacity="0.85"/>
+    <DropShadowEffect x:Key="LuxShadowWindow" BlurRadius="55" ShadowDepth="0" Color="#E0000000" Opacity="0.9"/>
+</ResourceDictionary>

@@ -134,6 +134,28 @@ public static class ExtractorScripts
     const priceRegex = /([\d۰-۹]{1,3}(?:[.,٬٫][\d۰-۹]{3})+|[\d۰-۹]{5,})/;
     const badKeywords = ['cart', 'checkout', 'my-account', 'login', 'register', 'wishlist', 'compare', 'add-to-cart', 'wp-admin'];
 
+    // ✅ رفع باگ ۲۷ (محصول فروش‌رفته): تشخیص کارت ناموجود — کلاس استاندارد ووکامرس
+    //    (outofstock / out-of-stock — الگوی واقعی کارت‌های وودمارت ننجون) + برچسب‌های
+    //    تم‌ها («فروخته شد»، «ناموجود»، …) + itemprop availability. متن‌ها فقط روی
+    //    برگ‌های کوتاه (≤32 کاراکتر) چک می‌شوند تا اسم محصول false positive ندهد.
+    const OOS_PHRASES = ['فروخته شد', 'فروش رفته', 'ناموجود', 'موجود نیست', 'اتمام موجودی', 'در انبار موجود نمی باشد', 'sold out', 'out of stock'];
+    const cardIsOutOfStock = (card) => {
+        try {
+            if (card.matches && card.matches('.outofstock, .out-of-stock')) return true;
+            if (card.querySelector('.outofstock, .out-of-stock, [itemprop=""availability""][href*=""outofstock"" i], [itemprop=""availability""][content*=""outofstock"" i]')) return true;
+            let leaves = card.querySelectorAll('span, p, div, em, strong, b, i');
+            for (let el of leaves) {
+                if (el.children.length > 0) continue;
+                let t = (el.textContent || '').trim().replace(/\u200c/g, ' ').toLowerCase();
+                if (!t || t.length > 32) continue;
+                for (let k = 0; k < OOS_PHRASES.length; k++) {
+                    if (t.indexOf(OOS_PHRASES[k]) >= 0) return true;
+                }
+            }
+        } catch (e) {}
+        return false;
+    };
+
     let products = [];
     let seenUrls = new Set();
 
@@ -159,9 +181,21 @@ public static class ExtractorScripts
                 if (types.includes('Product')) {
                     let offers = item.offers || {};
                     let offersList = Array.isArray(offers) ? offers : [offers];
-                    let prices = offersList.map(o => parseFloat(o.price || o.lowPrice || o.highPrice || 0)).filter(p => p > 0);
+                    // ✅ رفع باگ ۲۷ (محصول فروش‌رفته): offerهای OutOfStock کنار گذاشته می‌شوند؛
+                    //    اگر تمام offerهای دارای availability ناموجود بودند، کل محصول skip می‌شود.
+                    //    الگوی واقعی ننجون: ""availability"": ""http://schema.org/OutOfStock"" با قیمت
+                    //    معتبر — دقیقاً همان چیزی که محصول فروش‌رفته را وارد اسکن می‌کرد.
+                    let offerIsOOS = (o) => {
+                        let a = String((o && o.availability) || '').toLowerCase();
+                        return a.indexOf('outofstock') >= 0 || a.indexOf('soldout') >= 0;
+                    };
+                    let declared = offersList.filter(o => o && o.availability !== undefined && o.availability !== null);
+                    if (declared.length > 0 && declared.every(offerIsOOS)) return;
+                    let sellable = offersList.filter(o => !offerIsOOS(o));
+                    if (sellable.length === 0) return;
+                    let prices = sellable.map(o => parseFloat(o.price || o.lowPrice || o.highPrice || 0)).filter(p => p > 0);
                     let price = prices.length ? Math.min(...prices) : 0;
-                    let url = item.url || (offersList[0] && offersList[0].url) || '';
+                    let url = item.url || (sellable[0] && sellable[0].url) || '';
                     addProduct(url, item.name, cleanPrice(price));
                 }
                 if (types.includes('ItemList') && Array.isArray(item.itemListElement))
@@ -180,6 +214,12 @@ public static class ExtractorScripts
         let name = (card.querySelector('[itemprop=""name""]')?.textContent || '').trim();
         let priceEl = card.querySelector('[itemprop=""price""], [itemprop=""lowPrice""]');
         let price = cleanPrice(priceEl?.getAttribute('content') || priceEl?.textContent || '0');
+        // ✅ رفع باگ ۲۷: itemprop=""availability"" با OutOfStock → رد شدن
+        let availEl = card.querySelector('[itemprop=""availability""]');
+        if (availEl) {
+            let av = String(availEl.getAttribute('href') || availEl.getAttribute('content') || availEl.textContent || '').toLowerCase();
+            if (av.indexOf('outofstock') >= 0 || av.indexOf('soldout') >= 0) return;
+        }
         let link = card.querySelector('a[itemprop=""url""], a[href]');
         let img = card.querySelector('img[itemprop=""image""], img');
         if (name.length < 3 && img?.alt) name = img.alt.trim();
@@ -232,6 +272,8 @@ public static class ExtractorScripts
     }
 
     containers.forEach(card => {
+        // ✅ رفع باگ ۲۷: کارت‌های فروش‌رفته/ناموجود اسکن نمی‌شوند
+        if (cardIsOutOfStock(card)) return;
         // اسم محصول: پروفایل سایت → استانداردها → title attribute → img alt
         let name = '';
         let titleSelectors = [
@@ -313,6 +355,11 @@ public static class ExtractorScripts
             let el = document.querySelector(sel);
             if (el?.href && !el.href.endsWith('#')) return el.href;
         }
+        // ✅ رفع باگ ۲۶: سایت‌های AJAX-لود (تم Woodmart «load-on-scroll» مانند ننجون)
+        //    هیچ لینک صفحه‌بندی قابل‌کلیکی در بدنه ندارند اما تگ سئوی <link rel=""next"">
+        //    را در head می‌گذارند — همین تگ زنجیره‌ی /page/N/ را می‌سازد
+        let headNext = document.querySelector('link[rel=""next""]');
+        if (headNext?.href && !headNext.href.endsWith('#')) return headNext.href;
         try {
             let url = new URL(window.location.href);
             // ✅ رفع باگ: پارامتر صحیح (paged یا page) افزایش می‌یابد — قبلاً همیشه paged
@@ -330,8 +377,17 @@ public static class ExtractorScripts
             if (match) return url.origin + url.pathname.replace(/page\/\d+\/?$/, 'page/' + (parseInt(match[1]) + 1) + '/') + (url.search || '');
             let hasPaginationMarker = document.querySelector('.page-numbers a, .pagination a');
             // FORCE_PAGINATION: برای سایت‌هایی که لینک صفحه‌بندی ندارند اما /page/N/ کار می‌کند
-            if ((hasPaginationMarker || FORCE_PAGINATION) && products.length > 0)
+            // ✅ رفع باگ ۱۴ (v2.5): اگر URL از قبل /page/N/ داشت، صفحه N+1 ساخته می‌شود —
+            //    قبلاً همیشه '/page/2/' ته URL اضافه می‌شد و آدرس‌های مثل
+            //    «/category/x/page/2/page/2/» ساخته می‌شد (اسکن بعد از صفحه ۲ می‌شکست)
+            if ((hasPaginationMarker || FORCE_PAGINATION) && products.length > 0) {
+                let m = url.pathname.match(/page\/(\d+)/);
+                if (m) {
+                    let nextPage = parseInt(m[1]) + 1;
+                    return url.origin + url.pathname.replace(/page\/\d+/, 'page/' + nextPage + '/') + (url.search || '');
+                }
                 return url.origin + url.pathname.replace(/\/$/, '') + '/page/2/' + (url.search || '');
+            }
         } catch (e) {}
         return null;
     }

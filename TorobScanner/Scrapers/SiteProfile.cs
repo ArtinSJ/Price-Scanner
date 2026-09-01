@@ -22,6 +22,11 @@ public class SiteProfile
     public string[] PriceSelectors { get; init; } = Array.Empty<string>();
     /// <summary>سایت دکمه «بارگیری بیشتر» دارد؟ (کافه‌کالا و…)</summary>
     public bool NeedsLoadMore { get; init; } = false;
+    /// <summary>
+    /// ✨ v3.2.0: سلکتورهای اختصاصی دکمه «بارگیری بیشتر» — قبل از لیست عمومی موتور امتحان
+    /// می‌شوند (مثلاً کافه‌کالا: a.wd-load-more.load-on-click از تم Woodmart)
+    /// </summary>
+    public string[] LoadMoreSelectors { get; init; } = Array.Empty<string>();
     /// <summary>سایت اسکرول بی‌نهایت دارد؟</summary>
     public bool NeedsInfiniteScroll { get; init; } = false;
     public int MaxScrollRounds { get; init; } = 12;
@@ -75,10 +80,14 @@ public class SiteProfile
             SettleMs = 1200
         },
 
-        // ✅ تحلیل‌شده ۲۰۲۶-۰۸: WordPress/WooCommerce + تم Woodmart
-        //    کانتینر: .product-grid-item | عنوان: h3.wd-entities-title | قیمت استاندارد
-        //    صفحه‌بندی لینک ندارد اما /page/N/ فعال است (صفحه ۱: ۸ محصول، صفحه ۲: ۱۲ محصول)
-        //    → ForceTryPagination + محافظ محصول تکراری
+        // ✅ تحلیل‌شده ۲۰۲۶-۰۸ / بازبینی ۲۰۲۶-۰۹ (باگ ۲۸ و ۳۱ و ۳۳): افزونه‌ی Rank Math
+        //    آدرس /page/N/ را 301 → صفحه‌ی اصلی ریدایرکت می‌کند و ?paged/?page هم نادیده
+        //    گرفته می‌شوند. صفحه‌بندی واقعی فقط دکمه‌ی AJAX «بارگیری بیشتر محصولات» است
+        //    (a.wd-load-more.wd-products-load-more.load-on-click — هر کلیک ۸ محصول).
+        //    v3.2.0: سلکتور اختصاصی دکمه + انتظار هوشمند رشدِ شمارش کارت‌ها (جای
+        //    NetworkIdle کورکورانه) → سریع‌تر و مقاوم‌تر. بعد از اتمام، <link rel="next">
+        //    مرده است → محافظ ریدایرکت (Fix 28) زنجیره را تمیز قطع می‌کند.
+        //    تست زنده‌ی e2e: ۱۵ کلیک → ۱۲۳ محصول یونیک (قبلاً ~۱۵ گزارش شده بود)
         new SiteProfile
         {
             Name = "کافه‌کالا (coffekala.com)",
@@ -86,10 +95,12 @@ public class SiteProfile
             ContainerSelectors = new[] { ".product-grid-item" },
             TitleSelectors = new[] { "h3.wd-entities-title a", "h3.wd-entities-title", "a[title]" },
             PriceSelectors = new[] { ".price .amount", ".woocommerce-Price-amount" },
-            NeedsLoadMore = false,
+            NeedsLoadMore = true,
+            LoadMoreSelectors = new[] { "a.wd-load-more.load-on-click", "a.wd-load-more" },
             NeedsInfiniteScroll = false,
+            MaxLoadMoreClicks = 30,
             ForceTryPagination = true,
-            MaxPages = 40,
+            MaxPages = 5,
             SettleMs = 1500
         },
 
@@ -127,8 +138,11 @@ public class SiteProfile
             SettleMs = 2000
         },
 
-        // ✅ تحلیل‌شده ۲۰۲۶-۰۸: WordPress + المنتور + JSON-LD کامل ItemList
-        //    بهترین حالت ممکن: ۱۲ محصول با قیمت تخفیفی درست در JSON-LD
+        // ✅ تحلیل‌شده ۲۰۲۶-۰۸ / بازبینی ۲۰۲۶-۰۹ (باگ ۲۶): WordPress + Woodmart با
+        //    صفحه‌بندی «load-on-scroll» (AJAX) — در بدنه هیچ لینک صفحه‌بندی قابل‌کلیکی نیست
+        //    و صفحه‌بندی واقعی فقط با تگ سئوی <link rel="next"> در head اعلام می‌شود.
+        //    تست عملی: /page/N/ تا صفحه ۱۹ فعال است (۱۲ محصول در هر صفحه ≈ ۲۰۰ محصول)،
+        //    صفحه ۲۰ → 404. موتور حالا rel=next را می‌خواند + ForceTryPagination نگهبان.
         //    نکته: اسم‌ها پسوند «☕️ فروشگاه قهوه ننجون» دارند که موتور خودش پاک می‌کند
         new SiteProfile
         {
@@ -139,7 +153,8 @@ public class SiteProfile
             PriceSelectors = new[] { "ins .amount", ".woocommerce-Price-amount" },
             NeedsLoadMore = false,
             NeedsInfiniteScroll = false,
-            MaxPages = 10,
+            ForceTryPagination = true,
+            MaxPages = 25,
             SettleMs = 1500
         },
 

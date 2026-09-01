@@ -73,27 +73,59 @@ public class AdaptiveScraper : ISiteScraper
                 try
                 {
                     await BrowserLauncher.GotoWithRetryAsync(page, currentUrl);
+
+                    // ✅ رفع باگ ۲۸ (v3.1.4): محافظ ریدایرکت — اگر صفحه‌ی بعدیِ زنجیره (۲ به بعد)
+                    //    به آدرس دیگری پرت شد (مثل ریدایرکت 301 افزونه‌های سئو — Rank Math در
+                    //    coffekala: /page/N/ → صفحه اصلی)، محتوای مقصد به این دسته تعلق ندارد؛
+                    //    بدون استخراج قطع می‌شود تا ویجت‌های صفحه‌ی مقصد به‌عنوان محصول اسکن نشوند.
+                    if (pageCount > 1 && !SameLandingUrl(page.Url, currentUrl))
+                    {
+                        Logger.Error("ExternalScan", currentUrl,
+                            $"ریدایرکت به آدرس دیگر → قطع تمیز زنجیره: {page.Url}");
+                        break;
+                    }
+
                     await page.WaitForTimeoutAsync(_profile.SettleMs);
 
                     // --- رفتار صفحه بر اساس پروفایل (نه کورکورانه برای همه) ---
                     if (_profile.NeedsLoadMore)
                     {
+                        // ✅ رفع باگ ۳۳ (v3.2.0): جای NetworkIdle کورکورانه (۱۰s تایم‌اوت به‌ازای هر
+                        //    کلیک ≈ ۳ دقیقه معطلی)، شمارش کارت‌های محصول پول می‌شود و تا وقتی عدد
+                        //    بزرگ نشده (حداکثر ۱۵s) صبر می‌کنیم — سریع‌تر و مطمئن‌تر؛ اگر دو کلیک
+                        //    پشت‌سرهم هیچ محصول جدیدی نیاورد (پایان لیست یا AJAX خراب) تمیز قطع می‌شود.
+                        int baseline = await CountProductsAsync(page);
+                        int stallRounds = 0;
                         for (int i = 0; i < _profile.MaxLoadMoreClicks; i++)
                         {
                             cancellationToken.ThrowIfCancellationRequested();
                             try
                             {
-                                var loadMoreBtn = await page.QuerySelectorAsync(
-                                    "a.load-more, button.load-more, .elementor-button-load-more, .wd-load-more, .woocommerce-load-more, .yith-wcan-load-more, .alm-load-more-btn, button.btn-load-more, a.yith-wcan-infinite-scroll");
-                                if (loadMoreBtn != null && await loadMoreBtn.IsVisibleAsync() && await loadMoreBtn.IsEnabledAsync())
+                                var loadMoreBtn = await FindLoadMoreButtonAsync(page);
+                                if (loadMoreBtn == null || !await loadMoreBtn.IsVisibleAsync() || !await loadMoreBtn.IsEnabledAsync())
+                                    break;
+                                await loadMoreBtn.ScrollIntoViewIfNeededAsync();
+                                await loadMoreBtn.ClickAsync(new ElementHandleClickOptions { Timeout = 5000 });
+
+                                bool grew = false;
+                                for (int t = 0; t < 15; t++)
                                 {
-                                    await loadMoreBtn.ScrollIntoViewIfNeededAsync();
-                                    await loadMoreBtn.ClickAsync(new ElementHandleClickOptions { Timeout = 5000 });
-                                    try { await page.WaitForLoadStateAsync(LoadState.NetworkIdle, new PageWaitForLoadStateOptions { Timeout = 10000 }); } catch { }
-                                    await page.WaitForTimeoutAsync(1200);
+                                    cancellationToken.ThrowIfCancellationRequested();
+                                    await page.WaitForTimeoutAsync(1000);
+                                    int now = await CountProductsAsync(page);
+                                    if (now > baseline) { baseline = now; grew = true; break; }
                                 }
-                                else break;
+                                if (!grew)
+                                {
+                                    // شاید لود کند بود — یک فرصت دیگر با مکث طولانی‌تر
+                                    await page.WaitForTimeoutAsync(2500);
+                                    int now = await CountProductsAsync(page);
+                                    if (now > baseline) { baseline = now; stallRounds = 0; }
+                                    else if (++stallRounds >= 2) break;
+                                }
+                                else stallRounds = 0;
                             }
+                            catch (OperationCanceledException) { throw; }
                             catch { break; }
                         }
                     }
@@ -163,6 +195,61 @@ public class AdaptiveScraper : ISiteScraper
 
         return allProducts;
     }
+
+    /// <summary>
+    /// ✨ v3.2.0: پیدا کردن دکمه «بارگیری بیشتر» — اول سلکتورهای اختصاصی پروفایل، بعد لیست عمومی
+    /// </summary>
+    private async Task<IElementHandle?> FindLoadMoreButtonAsync(IPage page)
+    {
+        foreach (var sel in _profile.LoadMoreSelectors)
+        {
+            try
+            {
+                var btn = await page.QuerySelectorAsync(sel);
+                if (btn != null) return btn;
+            }
+            catch { }
+        }
+        return await page.QuerySelectorAsync(
+            "a.load-more, button.load-more, .elementor-button-load-more, .wd-load-more, .woocommerce-load-more, .yith-wcan-load-more, .alm-load-more-btn, button.btn-load-more, a.yith-wcan-infinite-scroll");
+    }
+
+    /// <summary>
+    /// ✨ v3.2.0: شمارش کارت‌های محصول صفحه (برای تشخیص رشد بعد از کلیک LoadMore)
+    /// </summary>
+    private async Task<int> CountProductsAsync(IPage page)
+    {
+        try
+        {
+            var selectors = _profile.ContainerSelectors.Length > 0
+                ? _profile.ContainerSelectors
+                : new[] { "li.product", ".product-grid-item", "div.product", "[class*='product-card']", "[class*='product-item']" };
+            var js = "() => { const sels = " + System.Text.Json.JsonSerializer.Serialize(selectors) + ";" +
+                     " for (const s of sels) { try { const n = document.querySelectorAll(s).length; if (n > 0) return n; } catch (e) {} }" +
+                     " return 0; }";
+            return await page.EvaluateAsync<int>(js);
+        }
+        catch { return 0; }
+    }
+
+    /// <summary>
+    /// ✨ v3.1.4: کلید فرود URL — فقط host + path (بدون scheme/query/اسلش انتهایی؛
+    /// path هم decode می‌شود تا انکودینگ متفاوتِ فارسی ریدایرکت حساب نشود)
+    /// </summary>
+    private static string LandingKey(string? url)
+    {
+        try
+        {
+            var u = new Uri(url!);
+            var path = Uri.UnescapeDataString(u.AbsolutePath).TrimEnd('/').ToLowerInvariant();
+            return u.Host.ToLowerInvariant().TrimEnd('.') + path;
+        }
+        catch { return (url ?? "").Trim().ToLowerInvariant(); }
+    }
+
+    /// <summary>✨ v3.1.4: آیا صفحه‌ی فرود همان آدرس درخواستی است؟ (ریدایرکت واقعی = false)</summary>
+    private static bool SameLandingUrl(string landed, string requested)
+        => string.Equals(LandingKey(landed), LandingKey(requested), StringComparison.Ordinal);
 
     /// <summary>پارسی قیمت فارسی/انگلیسی با هر نوع جداکننده</summary>
     public static decimal ParsePrice(string? text)

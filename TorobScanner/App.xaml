@@ -4,6 +4,13 @@
              xmlns:local="clr-namespace:TorobScanner"
              StartupUri="MainWindow.xaml">
     <Application.Resources>
-         
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <!-- ✨ v2.7: پالت تم (قابل تعویض زنده توسط ThemeService) -->
+                <ResourceDictionary Source="Themes/LuxPalette.xaml"/>
+                <!-- ✨ v2.5: استایل‌های کنترلی لوکس — سراسری برای همه پنجره‌ها -->
+                <ResourceDictionary Source="Themes/LuxTheme.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
     </Application.Resources>
 </Application>

@@ -40,5 +40,5 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           name: "Torob Intelligence ${{ github.ref_name }}"
-          generate_release_notes: true
+          body_path: RELEASE_BODY.md
           files: TorobScanner_${{ github.ref_name }}_win-x64.zip

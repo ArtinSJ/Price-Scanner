@@ -8,19 +8,32 @@
     <UseWPF>true</UseWPF>
     <!-- ساخت پروژه روی هر سیستمی (لینوکس/مک/CI) بدون ویندوز -->
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
-    <AssemblyTitle>Torob Intelligence Pro</AssemblyTitle>
+    <AssemblyTitle>BazarSanj</AssemblyTitle>
     <!-- ⚠️ نسخه برنامه — موتور بروزرسانی خودکار این را با تگ Release گیت‌هاب مقایسه می‌کند.
          برای انتشار نسخه جدید: این عدد را بالا ببرید + تگ vX.Y.Z بزنید (GitHub Actions بقیه را انجام می‌دهد) -->
-    <Version>2.4.1</Version>
-    <AssemblyVersion>2.4.1</AssemblyVersion>
-    <FileVersion>2.4.1</FileVersion>
-    <Product>Torob Intelligence Pro</Product>
+    <Version>3.2.0</Version>
+    <AssemblyVersion>3.2.0</AssemblyVersion>
+    <FileVersion>3.2.0</FileVersion>
+    <Product>BazarSanj</Product>
+    <NeutralLanguage>fa-IR</NeutralLanguage>
+    <!-- ✨ v2.6: آیکون لوکس بازارسنج روی فایل exe و تسک‌بار ویندوز -->
+    <ApplicationIcon>BazarSanj.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="EPPlus" Version="8.6.1" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.9" />
     <PackageReference Include="Microsoft.Playwright" Version="1.60.0" />
+  </ItemGroup>
+
+  <!-- ✨ v2.5: فونت فارسی Vazirmatn باندل‌شده (تم لوکس Platinum-Glass) -->
+  <ItemGroup>
+    <Resource Include="Fonts\Vazirmatn-Light.ttf" />
+    <Resource Include="Fonts\Vazirmatn-Regular.ttf" />
+    <Resource Include="Fonts\Vazirmatn-Medium.ttf" />
+    <Resource Include="Fonts\Vazirmatn-SemiBold.ttf" />
+    <Resource Include="Fonts\Vazirmatn-Bold.ttf" />
+    <Resource Include="Assets\BazarSanjIcon.png" />
   </ItemGroup>
 
 </Project>

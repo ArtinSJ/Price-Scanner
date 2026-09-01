@@ -17,6 +17,8 @@ namespace TorobScanner.Scrapers;
 /// ✅ رفع باگ ۱: راه‌اندازی مرورگر + نوشتن DB داخل try/catch
 /// ✅ رفع باگ ۵: قیمت بدون جداکننده هزارگان هم پشتیبانی می‌شود
 /// ✅ پشتیبانی CancellationToken
+/// ✅ رفع باگ ۱۵ (v2.5): رقابت شمارنده پیشرفت — خواندن current بعد از Increment
+///    اتمی داخل متغیر محلی (قبلاً عدد پیشرفت گاهی تکراری/جاافتاده نمایش داده می‌شد)
 /// </summary>
 public class TorobProductScraper
 {
@@ -49,12 +51,12 @@ public class TorobProductScraper
                         (DateTime.Now - product.LastUpdate).TotalHours < 6 &&
                         product.ProductName != "محصول جدید")
                     {
-                        Interlocked.Increment(ref current);
-                        progress?.Report((current, total, $"کش شده: {product.ProductName}"));
+                        int done = Interlocked.Increment(ref current); // ✅ رفع باگ ۱۵: خواندن اتمی
+                        progress?.Report((done, total, $"کش شده: {product.ProductName}"));
                         return;
                     }
 
-                    progress?.Report((current, total, $"در حال بررسی: {product.ProductName}"));
+                    progress?.Report((Volatile.Read(ref current), total, $"در حال بررسی: {product.ProductName}"));
 
                     decimal price; string store, title;
                     // ✅ رفع نشت منابع: context حتی در صورت خطا بسته می‌شود
@@ -79,7 +81,8 @@ public class TorobProductScraper
                         catch (Exception ex) { Logger.Error("RefreshProducts", product.TorobUrl, ex.Message); }
                     }
                     Interlocked.Increment(ref current);
-                    progress?.Report((current, total, $"بروزرسانی شد: {product.ProductName}"));
+                    int doneNow = Volatile.Read(ref current); // ✅ رفع باگ ۱۵: خواندن اتمی
+                    progress?.Report((doneNow, total, $"بروزرسانی شد: {product.ProductName}"));
                 }
                 catch (OperationCanceledException) { throw; }
                 catch (Exception ex) { Logger.Error("RefreshProducts", product.TorobUrl, ex.Message); }

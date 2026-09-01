@@ -46,7 +46,7 @@ public class UpdateService
             // سازگاری با شرایط شبکه ایران — همانند فلسفه BrowserLauncher
             ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
         });
-        c.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("TorobIntelligence", CurrentVersion()));
+        c.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("BazarSanj", CurrentVersion()));
         c.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
         c.Timeout = TimeSpan.FromMinutes(10);
         return c;
@@ -192,8 +192,8 @@ public class UpdateService
         // ⚠️ دیتابیس/لاگ عمداً exclude — کاربر دیتایش را از دست ندهد
         var cmd = $@"@echo off
 chcp 65001 >nul
-title Torob Intelligence - Updating...
-echo در حال بروزرسانی Torob Intelligence...
+title BazarSanj - Updating...
+echo در حال بروزرسانی بازارسنج...
 :waitloop
 tasklist /FI ""PID eq {pid}"" 2>nul | find ""{pid}"" >nul
 if not errorlevel 1 (
