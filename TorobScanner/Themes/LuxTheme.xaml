@@ -215,9 +215,18 @@
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="{DynamicResource LuxInputRadius}">
                             <Grid>
+                                <!-- ✅ v3.2.1: قالب شفاف اختصاصی برای ToggleButton — قالب پیش‌فرض ویندوز
+                                     (ButtonChrome) هنگام هاور/کلیک گرادیان روشن سفیدِ خودش را روی کل
+                                     کومبوباکس می‌کشید و کل باکس در تم تیره سفید می‌شد -->
                                 <ToggleButton x:Name="ToggleButton" Focusable="false"
                                               IsChecked="{Binding Path=IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}"
-                                              ClickMode="Press" Background="Transparent" BorderThickness="0"/>
+                                              ClickMode="Press" Background="Transparent" BorderThickness="0">
+                                    <ToggleButton.Template>
+                                        <ControlTemplate TargetType="ToggleButton">
+                                            <Border Background="Transparent"/>
+                                        </ControlTemplate>
+                                    </ToggleButton.Template>
+                                </ToggleButton>
                                 <ContentPresenter x:Name="ContentSite" IsHitTestVisible="False"
                                                   Content="{TemplateBinding SelectionBoxItem}"
                                                   ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
@@ -247,6 +256,11 @@
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
                             <Setter TargetName="bd" Property="Background" Value="{DynamicResource LuxGlassFillStrong}"/>
+                        </Trigger>
+                        <!-- ✨ v3.2.1: حالت بازِ منو — شیشه کمی پررنگ + فلش با رنگ اکسنت -->
+                        <Trigger Property="IsDropDownOpen" Value="True">
+                            <Setter TargetName="bd" Property="Background" Value="{DynamicResource LuxGlassFillStrong}"/>
+                            <Setter TargetName="chev" Property="Stroke" Value="{DynamicResource LuxAccent}"/>
                         </Trigger>
                         <Trigger SourceName="ToggleButton" Property="IsMouseOver" Value="True">
                             <Setter TargetName="chev" Property="Stroke" Value="{DynamicResource LuxAccent}"/>
@@ -292,27 +306,40 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="ProgressBar">
-                    <Grid>
-                        <Border x:Name="PART_Track" Background="{TemplateBinding Background}" CornerRadius="3"/>
-                        <Border x:Name="PART_Indicator" Background="{TemplateBinding Foreground}" CornerRadius="3"
-                                HorizontalAlignment="Left">
-                            <Border.RenderTransform>
-                                <TranslateTransform x:Name="indTx" X="0"/>
-                            </Border.RenderTransform>
-                        </Border>
-                    </Grid>
+                    <!-- ✅ v3.2.1: بازنویسی مطابق قرارداد رسمی WPF:
+                         • PART_Indicator داخل PART_Track و داخل Grid کلیپ‌شده ← هیچ عنصری از نوار بیرون نمی‌زند
+                         • در IsIndeterminate موتور WPF عرضِ PART_Indicator را کلِ نوار ست می‌کند (SetProgressBarIndicatorLength)
+                           و چون مقدار مستقیمِ کد بر Setter قالب می‌چربد، طرح قبلی کل نوار درخشان را با
+                           TranslateTransform ‎−۸۰ تا +۷۰۰ پیکسل از قسمت بیرون پرت می‌کرد!
+                         • راه‌حل: «جت نور» به لایه‌ی مستقل glow منتقل شد + PART_Indicator در حالت
+                           indeterminate فقط مخفی می‌شود (Opacity) تا WPF آزادانه عرضش را مدیریت کند -->
+                    <Border x:Name="PART_Track" Background="{TemplateBinding Background}" CornerRadius="3">
+                        <Grid ClipToBounds="True">
+                            <Border x:Name="glow" Width="64" HorizontalAlignment="Left"
+                                    Background="{TemplateBinding Foreground}" CornerRadius="3" Opacity="0"
+                                    IsHitTestVisible="False">
+                                <Border.RenderTransform>
+                                    <TranslateTransform x:Name="glowTx" X="-80"/>
+                                </Border.RenderTransform>
+                            </Border>
+                            <Border x:Name="PART_Indicator" Background="{TemplateBinding Foreground}" CornerRadius="3"
+                                    HorizontalAlignment="Left" Width="0"/>
+                        </Grid>
+                    </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="FlowDirection" Value="RightToLeft">
                             <Setter TargetName="PART_Indicator" Property="HorizontalAlignment" Value="Right"/>
                         </Trigger>
-                        <!-- ✨ انیمیشن indeterminate — جریان نرم نور روی شیشه -->
+                        <!-- ✨ انیمیشن indeterminate — جت نور کاملاً داخل کلیپ نوار -->
                         <Trigger Property="IsIndeterminate" Value="True">
-                            <Setter TargetName="PART_Indicator" Property="Width" Value="64"/>
+                            <Setter TargetName="PART_Indicator" Property="Opacity" Value="0"/>
                             <Trigger.EnterActions>
                                 <BeginStoryboard>
                                     <Storyboard>
-                                        <DoubleAnimation Storyboard.TargetName="indTx" Storyboard.TargetProperty="X"
-                                                         From="-80" To="700" Duration="0:0:1.15"
+                                        <DoubleAnimation Storyboard.TargetName="glow" Storyboard.TargetProperty="Opacity"
+                                                         To="1" Duration="0:0:0.15"/>
+                                        <DoubleAnimation Storyboard.TargetName="glowTx" Storyboard.TargetProperty="X"
+                                                         From="-80" To="900" Duration="0:0:1.4"
                                                          RepeatBehavior="Forever"/>
                                     </Storyboard>
                                 </BeginStoryboard>
@@ -320,8 +347,10 @@
                             <Trigger.ExitActions>
                                 <BeginStoryboard>
                                     <Storyboard>
-                                        <DoubleAnimation Storyboard.TargetName="indTx" Storyboard.TargetProperty="X"
-                                                         To="0" Duration="0:0:0"/>
+                                        <DoubleAnimation Storyboard.TargetName="glow" Storyboard.TargetProperty="Opacity"
+                                                         To="0" Duration="0:0:0.2"/>
+                                        <DoubleAnimation Storyboard.TargetName="glowTx" Storyboard.TargetProperty="X"
+                                                         To="-80" Duration="0:0:0"/>
                                     </Storyboard>
                                 </BeginStoryboard>
                             </Trigger.ExitActions>
