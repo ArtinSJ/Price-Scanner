@@ -5,7 +5,7 @@
 | فایل | مناسب برای | پیش‌نیاز |
 |---|---|---|
 | **BazarSanj-3.2.0-Portable-win-x64.zip** (≈۲۵۵MB) | اکثر کاربران — **بدون هیچ نصبی**؛ node.exe و کرومیوم داخل بسته | هیچ (ویندوز ۱۰/۱۱ x64) |
-| **TorobScanner_3.2.0_win-x64.zip** (سبک) | کاربرانی که .NET دارند | .NET 9 Desktop Runtime + مرورگر |
+| **BazarSanj-3.2.0-Lite-win-x64.zip** (≈۴۳MB) | کاربران حرفه‌ای — درایور node.exe داخل بسته است | .NET 9 Desktop Runtime + مرورگر سیستم (Edge/Chrome) |
 
 ### اجرای نسخه‌ی پرتابل
 1. Extract در پوشه‌ای با مسیر انگلیسی (مثلاً `C:\BazarSanj`)
