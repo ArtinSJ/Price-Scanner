@@ -66,6 +66,17 @@ public partial class MainWindow : Window
     private ScrollViewer _listScroll = null!;
     private Grid _toastHost = null!;   // ✨ v2.6: میزبان اعلان‌های شیشه‌ای
 
+    // ✨ v3.2.1: سایدبار جمع‌شونده — برای مانیتورهای کوچک
+    private Border _sidebar = null!;
+    private UIElement _sidebarFull = null!;
+    private UIElement _sidebarRail = null!;
+    private Button _sidebarToggle = null!;
+    private System.Windows.Shapes.Path _sidebarChevron = null!;
+    private bool _sidebarCollapsed;
+    private bool _sidebarAnimating;
+    private const double SidebarWide = 252;
+    private const double SidebarNarrow = 66;
+
     private HashSet<string> _recentlyScannedNewUrls = new();
     private CancellationTokenSource? _cts;
     private bool _isBusy;
@@ -451,7 +462,8 @@ public partial class MainWindow : Window
     private void BuildContent(Grid mainGrid)
     {
         var content = new Grid();
-        content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(252) });
+        // ✨ v3.2.1: عرض ستون سایدبار Auto شد — عرض واقعی با انیمیشن خودِ سایدبار کنترل می‌شود
+        content.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         Grid.SetRow(content, 1);
 
@@ -465,13 +477,15 @@ public partial class MainWindow : Window
 
     private void BuildSidebar(Grid content)
     {
-        var sidebar = new Border
+        _sidebar = new Border
         {
+            Width = SidebarWide,              // ✨ v3.2.1: عرض صریح — انیمیشن‌پذیر (ستون Auto است)
             Background = LuxUI.SidebarFill,
             BorderBrush = LuxUI.GlassStroke,
             BorderThickness = LuxUI.CardBorderThick,
             CornerRadius = new CornerRadius(LuxUI.SideRadius),
             Margin = new Thickness(16, 0, 12, 16),
+            ClipToBounds = true,              // ✨ v3.2.1: هنگام جمع‌شدن، محتوا بیرون نمی‌زند
             Effect = LuxUI.CardShadow   // بروتال: سایه سخت | کلود: سایه نرم | گلس: بدون سایه
         };
         var stack = new StackPanel { Margin = new Thickness(16, 22, 16, 16) };
@@ -543,9 +557,243 @@ public partial class MainWindow : Window
         engineCard.Child = engineStack;
         stack.Children.Add(engineCard);
 
-        sidebar.Child = stack;
-        Grid.SetColumn(sidebar, 0);
-        content.Children.Add(sidebar);
+        _sidebarFull = stack;
+        _sidebarRail = BuildSidebarRail();
+
+        var sidebarHost = new Grid();
+        sidebarHost.Children.Add(_sidebarFull);
+        sidebarHost.Children.Add(_sidebarRail);
+        sidebarHost.Children.Add(BuildSidebarToggle());   // لایه‌ی رویی — دستگیره‌ی جمع/باز کردن
+
+        _sidebar.Child = sidebarHost;
+        Grid.SetColumn(_sidebar, 0);
+        content.Children.Add(_sidebar);
+
+        // ✨ v3.2.1: اعمال وضعیت ذخیره‌شده (بدون انیمیشن هنگام شروع)
+        _sidebarCollapsed = SettingsService.Current.SidebarCollapsed;
+        ApplySidebarState(animate: false);
+    }
+
+    // ═════════════════ سایدبار جمع‌شونده (v3.2.1) ═════════════════
+
+    /// <summary>
+    /// ✨ v3.2.1: نمای ریل جمع‌شده — فقط آیکون‌ها؛ هر دکمه همان عملکرد حالت باز را دارد
+    /// و با ToolTip راهنما همراه است. برای مانیتورهای کوچک ~۱۸۶px فضا آزاد می‌شود.
+    /// </summary>
+    private FrameworkElement BuildSidebarRail()
+    {
+        var rail = new StackPanel
+        {
+            Margin = new Thickness(0, 56, 0, 14),   // ✨ ۵۶px بالای ریل: ناحیه‌ی دستگیره — بدون تداخل
+            Opacity = 0,
+            Visibility = Visibility.Collapsed
+        };
+
+        // ✨ حالت ریل: لوگوی بزرگ حذف می‌شود تا دستگیره‌ی جمع/باز، سرِ ریل بنشیند
+        rail.Children.Add(RailButton("⟳", "بروزرسانی لیست", RefreshAll_Click));
+        rail.Children.Add(RailButton("◈", "اسکن سایت‌های دیگر", ScanExternalSite_Click));
+        rail.Children.Add(RailButton("⇄", "مقایسه محصولات", CompareHub_Click));
+        rail.Children.Add(RailButton("↥", "خروجی اکسل", ExportLinks_Click));
+        rail.Children.Add(RailButton("▦", "مدیریت دسته‌بندی‌ها", ManageCategories_Click));
+        rail.Children.Add(RailButton("⚙", "تنظیمات", OpenSettings_Click));
+
+        // نبض وضعیت موتور — همان سبز حالت باز
+        var engineDot = new Ellipse
+        {
+            Width = 8, Height = 8,
+            Margin = new Thickness(0, 14, 0, 0),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            Fill = LuxUI.Success,
+            ToolTip = "موتور اسکن تطبیقی — فعال"
+        };
+        rail.Children.Add(engineDot);
+
+        return rail;
+    }
+
+    /// <summary>دکمه‌ی آیکونی ریل — همان روحِ SideButton اما فقط چیپ ۴۶×۴۶ با ToolTip</summary>
+    private Button RailButton(string icon, string label, RoutedEventHandler click)
+    {
+        var btn = new Button
+        {
+            Width = 46, Height = 46,
+            Margin = new Thickness(0, 0, 0, 10),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            Padding = new Thickness(0),
+            ToolTip = label
+        };
+
+        var chipBrush = new SolidColorBrush(LuxUI.ChipFillColor);
+        var chip = new Border
+        {
+            Width = 32, Height = 32,
+            Background = chipBrush,
+            CornerRadius = new CornerRadius(LuxUI.ChipRadius),
+            BorderBrush = LuxUI.GlassStroke, BorderThickness = LuxUI.ChipBorderThick,
+            Child = new TextBlock
+            {
+                Text = icon, FontSize = 14, Foreground = LuxUI.Accent,
+                HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center
+            }
+        };
+        btn.Content = chip;
+
+        var chipHover = new ColorAnimation
+        {
+            To = LuxUI.ChipFillHoverColor,
+            Duration = TimeSpan.FromMilliseconds(150),
+            EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
+        };
+        var chipRest = new ColorAnimation
+        {
+            To = LuxUI.ChipFillColor,
+            Duration = TimeSpan.FromMilliseconds(200),
+            EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
+        };
+        btn.MouseEnter += (s, e) => chipBrush.BeginAnimation(SolidColorBrush.ColorProperty, chipHover);
+        btn.MouseLeave += (s, e) => chipBrush.BeginAnimation(SolidColorBrush.ColorProperty, chipRest);
+
+        btn.Click += click;
+        return btn;
+    }
+
+    /// <summary>
+    /// دستگیره‌ی شناور جمع/باز کردن — یک دایره‌ی شیشه‌ای با فلش، لبه‌ی داخلی سایدبار
+    /// (سمت فضای کاری) عموداً در میانه. لایه‌ی میزبان LTR است تا جای فلش مستقل از RTL قطعی باشد.
+    /// </summary>
+    private FrameworkElement BuildSidebarToggle()
+    {
+        var host = new Grid
+        {
+            FlowDirection = FlowDirection.LeftToRight,   // مهم: جای دستگیره مستقل از آینه‌سازی RTL
+            Background = null                            // کلیک از لایه‌ی خالی رد می‌شود
+        };
+
+        _sidebarToggle = new Button
+        {
+            Width = 26, Height = 26,
+            Padding = new Thickness(0),
+            HorizontalAlignment = HorizontalAlignment.Left,   // لبه‌ی داخلی (سمت فضای کاری)
+            VerticalAlignment = VerticalAlignment.Top,        // گوشه‌ی بالا — در هر دو حالت بدون تداخل
+            Margin = new Thickness(4, 22, 4, 0),
+            ToolTip = "جمع کردن منو"
+        };
+
+        var toggleBrush = new SolidColorBrush(LuxUI.ChipFillColor);
+        _sidebarToggle.Background = toggleBrush;
+
+        // فلش — با Path می‌کشیم تا به فونت وابسته نباشد؛ نوکش سمت راست (جهت جمع‌شدن)
+        _sidebarChevron = new System.Windows.Shapes.Path
+        {
+            Data = Geometry.Parse("M 0,0 L 5.5,5.5 L 0,11"),
+            Stroke = LuxUI.TextSecondary,
+            StrokeThickness = 1.7,
+            StrokeStartLineCap = PenLineCap.Round,
+            StrokeEndLineCap = PenLineCap.Round,
+            StrokeLineJoin = PenLineJoin.Round,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            RenderTransformOrigin = new Point(0.5, 0.5),
+            RenderTransform = new RotateTransform(0),
+            IsHitTestVisible = false
+        };
+        _sidebarToggle.Content = _sidebarChevron;
+
+        var toggleHover = new ColorAnimation
+        {
+            To = LuxUI.ChipFillHoverColor,
+            Duration = TimeSpan.FromMilliseconds(150),
+            EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
+        };
+        var toggleRest = new ColorAnimation
+        {
+            To = LuxUI.ChipFillColor,
+            Duration = TimeSpan.FromMilliseconds(200),
+            EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
+        };
+        _sidebarToggle.MouseEnter += (s, e) => toggleBrush.BeginAnimation(SolidColorBrush.ColorProperty, toggleHover);
+        _sidebarToggle.MouseLeave += (s, e) => toggleBrush.BeginAnimation(SolidColorBrush.ColorProperty, toggleRest);
+        _sidebarToggle.Click += SidebarToggle_Click;
+
+        host.Children.Add(_sidebarToggle);
+        return host;
+    }
+
+    private void SidebarToggle_Click(object sender, RoutedEventArgs e)
+    {
+        if (_sidebarAnimating) return;
+        _sidebarCollapsed = !_sidebarCollapsed;
+        SettingsService.Current.SidebarCollapsed = _sidebarCollapsed;
+        SettingsService.Save();
+        ApplySidebarState(animate: true);
+    }
+
+    /// <summary>اعمال وضعیت جمع/باز — با انیمیشن نرم عرض + محو متقابل دو لایه</summary>
+    private void ApplySidebarState(bool animate)
+    {
+        double target = _sidebarCollapsed ? SidebarNarrow : SidebarWide;
+        UIElement show = _sidebarCollapsed ? _sidebarRail : _sidebarFull;
+        UIElement hide = _sidebarCollapsed ? _sidebarFull : _sidebarRail;
+
+        UpdateToggleVisuals();
+
+        if (!animate)
+        {
+            _sidebar.Width = target;
+            show.Opacity = 1; show.Visibility = Visibility.Visible;
+            hide.Opacity = 0; hide.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        _sidebarAnimating = true;
+
+        // لایه‌ی ورودی — با تاخیر کوتاه تا خروجِ لایه‌ی قبلی شروع شود
+        show.Visibility = Visibility.Visible;
+        show.Opacity = 0;
+        var showAnim = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(230))
+        {
+            BeginTime = TimeSpan.FromMilliseconds(110),
+            EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
+        };
+        show.BeginAnimation(OpacityProperty, showAnim);
+
+        // لایه‌ی خروجی
+        var hideAnim = new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(140))
+        {
+            EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseIn }
+        };
+        hide.BeginAnimation(OpacityProperty, hideAnim);
+
+        // عرض سایدبار — قلب انیمیشن؛ ستون Auto فضای کاری را نرم جابه‌جا می‌کند
+        double from = _sidebar.Width;
+        var widthAnim = new DoubleAnimation(from, target, TimeSpan.FromMilliseconds(300))
+        {
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseInOut }
+        };
+        widthAnim.Completed += (s, e) =>
+        {
+            _sidebar.BeginAnimation(WidthProperty, null);
+            _sidebar.Width = target;
+            hide.BeginAnimation(OpacityProperty, null);
+            hide.Opacity = 0;
+            hide.Visibility = Visibility.Collapsed;
+            _sidebarAnimating = false;
+        };
+        _sidebar.BeginAnimation(WidthProperty, widthAnim);
+    }
+
+    /// <summary>چرخش نرم فلش + بروزرسانی ToolTip دستگیره</summary>
+    private void UpdateToggleVisuals()
+    {
+        _sidebarToggle.ToolTip = _sidebarCollapsed ? "باز کردن منو" : "جمع کردن منو";
+        if (_sidebarChevron.RenderTransform is RotateTransform rt)
+        {
+            var rot = new DoubleAnimation(_sidebarCollapsed ? 180 : 0, TimeSpan.FromMilliseconds(280))
+            {
+                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
+            };
+            rt.BeginAnimation(RotateTransform.AngleProperty, rot);
+        }
     }
 
     private Button SideButton(string icon, string label, RoutedEventHandler click)

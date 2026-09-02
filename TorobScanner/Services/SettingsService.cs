@@ -15,6 +15,9 @@ public class AppSettings
 
     /// <summary>نصب خودکار بروزرسانی بدون پرسش (پیش‌فرض: خاموش)</summary>
     public bool AutoInstallUpdates { get; set; } = false;
+
+    /// <summary>✨ v3.2.1: سایدبار هنگام شروع جمع‌شده باشد؟ (برای مانیتورهای کوچک)</summary>
+    public bool SidebarCollapsed { get; set; } = false;
 }
 
 /// <summary>
