@@ -48,9 +48,16 @@ public class UpdateService
         });
         c.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("BazarSanj", CurrentVersion()));
         c.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
-        c.Timeout = TimeSpan.FromMinutes(10);
+        c.Timeout = TimeSpan.FromMinutes(30);   // ✨ v3.2.2: ۱۰ دقیقه برای اینترنت ایران کم بود — دانلود نیمه‌کاره Timeout می‌شد
         return c;
     }
+
+    /// <summary>
+    /// ✨ v3.2.2: نوع نصب فعلی — اگر hostfxr.dll کنار exe باشد یعنی self-contained (پرتابل).
+    /// آپدیتر قبلاً کورکورانه اولین zip (Lite) را برمی‌داشت — برای نصب پرتابل باید Portable بردارد.
+    /// </summary>
+    public static bool IsSelfContainedInstall()
+        => File.Exists(Path.Combine(AppContext.BaseDirectory, "hostfxr.dll"));
 
     /// <summary>نسخه فعلی برنامه (از AssemblyVersion در csproj)</summary>
     public static string CurrentVersion()
@@ -76,21 +83,34 @@ public class UpdateService
         var latestStr = tag.TrimStart('v', 'V');
         var notes = root.TryGetProperty("body", out var b) ? b.GetString() ?? "" : "";
 
-        // پیدا کردن اولین asset از نوع zip
+        // ✨ v3.2.2: انتخاب هوشمند asset — Portable برای نصب پرتابل، Lite برای نصب سبک
+        // (قبلاً همیشه اولین zip برداشته می‌شد و نصب پرتابل با Lite جایگزین ناقص می‌شد)
         string dlUrl = "", assetName = "";
         long assetSize = 0;
         if (root.TryGetProperty("assets", out var assets) && assets.ValueKind == JsonValueKind.Array)
         {
+            bool selfContained = IsSelfContainedInstall();
+            string want = selfContained ? "Portable" : "Lite";
+            string? fallbackUrl = null, fallbackName = null;
+            long fallbackSize = 0;
             foreach (var a in assets.EnumerateArray())
             {
                 var name = a.GetProperty("name").GetString() ?? "";
-                if (name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+                if (!name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase)) continue;
+                var url = a.GetProperty("browser_download_url").GetString() ?? "";
+                var size = a.TryGetProperty("size", out var sz) ? sz.GetInt64() : 0;
+
+                if (name.Contains(want, StringComparison.OrdinalIgnoreCase))
                 {
-                    dlUrl = a.GetProperty("browser_download_url").GetString() ?? "";
-                    assetName = name;
-                    assetSize = a.TryGetProperty("size", out var sz) ? sz.GetInt64() : 0;
+                    dlUrl = url; assetName = name; assetSize = size;
                     break;
                 }
+                fallbackUrl ??= url; fallbackName ??= name; fallbackSize = fallbackSize == 0 ? size : fallbackSize;
+            }
+            // اگر asset هم‌نام نوع نصب پیدا نشد → اولین zip موجود
+            if (string.IsNullOrEmpty(dlUrl) && fallbackUrl != null)
+            {
+                dlUrl = fallbackUrl; assetName = fallbackName!; assetSize = fallbackSize;
             }
         }
 
@@ -127,8 +147,34 @@ public class UpdateService
         }
     }
 
-    /// <summary>دانلود فایل بروزرسانی با گزارش پیشرفت (درصد)</summary>
+    /// <summary>
+    /// دانلود فایل بروزرسانی با گزارش پیشرفت (درصد) + ✨ v3.2.2: یک تلاش مجدد خودکار
+    /// (اینترنت ناپایدار → دانلود نیمه‌کاره zip خراب می‌شد و استخراج استثنا می‌انداخت)
+    /// </summary>
     public async Task<string> DownloadUpdateAsync(UpdateInfo info, IProgress<int>? progress, CancellationToken ct = default)
+    {
+        Exception? lastError = null;
+        for (int attempt = 1; attempt <= 2; attempt++)
+        {
+            try
+            {
+                return await DownloadOnceAsync(info, progress, ct);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                lastError = ex;
+                Logger.Error("Update/Download", info.AssetName, $"attempt {attempt} failed: {ex.Message}");
+                if (attempt < 2) await Task.Delay(1500, ct);
+            }
+        }
+        throw lastError!;
+    }
+
+    private async Task<string> DownloadOnceAsync(UpdateInfo info, IProgress<int>? progress, CancellationToken ct)
     {
         var tmpDir = Path.Combine(Path.GetTempPath(), "TorobScannerUpdate");
         if (Directory.Exists(tmpDir)) { try { Directory.Delete(tmpDir, true); } catch { } }
@@ -180,6 +226,12 @@ public class UpdateService
     /// اعمال بروزرسانی: اسکریپت cmd ساخته می‌شود که بعد از خروج برنامه،
     /// فایل‌های جدید را روی پوشه برنامه کپی و برنامه را دوباره اجرا می‌کند.
     /// (دیتابیس و لاگ‌ها دست نمی‌خورند — فقط فایل‌های برنامه جایگزین می‌شوند)
+    /// ✨ v3.2.2 بازنویسی ضدباگ:
+    ///  ۱) پروسسه‌های زامبی (node/chrome باقی‌مانده از اسکن) که از پوشه‌ی برنامه اجرا شده‌اند
+    ///     قبل از کپی بسته می‌شوند — قفل فایل = دلیل اصلی «نه آپدیت می‌شود نه باز می‌شود»
+    ///  ۲) شکست robocopy دیگر روی pause مخفی گیر نمی‌کند — لاگ می‌نویسد و برنامه را دوباره باز می‌کند
+    ///  ۳) اسکریپت UTF-8 بدون BOM — BOM خط اول (@echo off) را خراب می‌کرد
+    ///  ۴) sleep با ping — timeout در پنجره‌ی مخفی/بدون ورودی ممکن است شکست بخورد
     /// این متد برنامه را می‌بندد.
     /// </summary>
     public void ApplyUpdateAndRestart(string sourceDir)
@@ -193,23 +245,28 @@ public class UpdateService
         var cmd = $@"@echo off
 chcp 65001 >nul
 title BazarSanj - Updating...
-echo در حال بروزرسانی بازارسنج...
+echo BazarSanj update in progress...
 :waitloop
 tasklist /FI ""PID eq {pid}"" 2>nul | find ""{pid}"" >nul
 if not errorlevel 1 (
-    timeout /t 1 /nobreak >nul
+    ping -n 2 127.0.0.1 >nul
     goto waitloop
 )
-robocopy ""{sourceDir}"" ""{appDir}"" /E /XF *.db *.db-wal *.db-shm error_log*.txt /R:3 /W:1 >nul
+rem تاخیر اطمینان برای آزاد شدن دستگیره‌ی فایل‌ها
+ping -n 3 127.0.0.1 >nul
+rem بستن پروسسه‌های زامبی‌ای که از پوشه‌ی برنامه اجرا شده‌اند (node / chrome)
+powershell -NoProfile -ExecutionPolicy Bypass -Command ""Get-Process | ForEach-Object {{ try {{ if ($_.Path -like '{appDir}*') {{ Stop-Process -Id $_.Id -Force }} }} catch {{}} }}"" 2>nul
+robocopy ""{sourceDir}"" ""{appDir}"" /E /XF *.db *.db-wal *.db-shm error_log*.txt /R:5 /W:2 >nul
 if errorlevel 8 (
-    echo خطا در کپی فایل‌ها!
-    pause
+    echo %date% %time% robocopy error >> ""{appDir}\update_error.log""
+    start """" ""{exePath}""
     exit /b 1
 )
 start """" ""{exePath}""
 del ""%~f0""
 ";
-        File.WriteAllText(script, cmd, System.Text.Encoding.UTF8);
+        // ✨ بدون BOM — BOM ابتدای اسکریپت cmd، خط اول را به فرمان نامعتبر تبدیل می‌کرد
+        File.WriteAllText(script, cmd, new System.Text.UTF8Encoding(false));
 
         Process.Start(new ProcessStartInfo
         {

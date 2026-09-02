@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
@@ -23,6 +24,7 @@ public class UpdateWindow : Window
     private ProgressBar _progressBar = null!;
     private Button _actionBtn = null!;
     private bool _busy;
+    private bool _downloadFailed;   // ✨ v3.2.2: پس از شکست دانلود، دکمه به لینک دستی تبدیل می‌شود
 
     /// <summary>
     /// ✨ v2.7: حالت خودکار — بعد از بررسی، اگر نسخه جدید بود بدون پرسش
@@ -157,6 +159,21 @@ public class UpdateWindow : Window
     {
         if (_busy) return;
 
+        // ✨ v3.2.2: بعد از شکست دانلود (مثلاً فیلترینگ CDN گیت‌هاب) → باز کردن صفحه‌ی دانلود دستی
+        if (_downloadFailed)
+        {
+            try
+            {
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = "https://github.com/ArtinSJ/Price-Scanner/releases/latest",
+                    UseShellExecute = true
+                });
+            }
+            catch { }
+            return;
+        }
+
         // اگر آپدیتی موجود نیست → بررسی مجدد
         if (_updateInfo == null || !_updateInfo.UpdateAvailable)
         {
@@ -199,10 +216,12 @@ public class UpdateWindow : Window
         catch (Exception ex)
         {
             Logger.Error("Update/Download", _updateInfo.DownloadUrl, ex.ToString());
-            _statusText.Text = $"خطا در دانلود/نصب:\n{ex.Message}";
+            _statusText.Text = $"خطا در دانلود/نصب:\n{ex.Message}\n(می‌توانید بسته را از صفحه‌ی انتشار دستی دانلود کنید)";
             _statusText.Foreground = LuxUI.Danger;
             _progressBar.Visibility = Visibility.Collapsed;
             _busy = false;
+            _downloadFailed = true;
+            _actionBtn.Content = "باز کردن صفحه‌ی دانلود دستی";
             _actionBtn.IsEnabled = true;
         }
     }

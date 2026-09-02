@@ -11,9 +11,9 @@
     <AssemblyTitle>BazarSanj</AssemblyTitle>
     <!-- ⚠️ نسخه برنامه — موتور بروزرسانی خودکار این را با تگ Release گیت‌هاب مقایسه می‌کند.
          برای انتشار نسخه جدید: این عدد را بالا ببرید + تگ vX.Y.Z بزنید (GitHub Actions بقیه را انجام می‌دهد) -->
-    <Version>3.2.1</Version>
-    <AssemblyVersion>3.2.1</AssemblyVersion>
-    <FileVersion>3.2.1</FileVersion>
+    <Version>3.2.2</Version>
+    <AssemblyVersion>3.2.2</AssemblyVersion>
+    <FileVersion>3.2.2</FileVersion>
     <Product>BazarSanj</Product>
     <NeutralLanguage>fa-IR</NeutralLanguage>
     <!-- ✨ v2.6: آیکون لوکس بازارسنج روی فایل exe و تسک‌بار ویندوز -->
