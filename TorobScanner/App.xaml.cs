@@ -13,12 +13,31 @@ namespace TorobScanner;
 /// ✅ رفع باگ ۱۷ (v2.5.1): پیام خطا حالا «علت واقعی» را نشان می‌دهد، نه پوسته‌ی XamlParseException را.
 /// ✨ v2.7: بارگذاری تنظیمات + اعمال تم ذخیره‌شده قبل از باز شدن پنجره‌ها
 /// ✨ v2.7: بررسی خودکار بروزرسانی هنگام شروع (قابل خاموش‌کردن از تنظیمات)
+/// ✨ v3.5: تک‌نمونه‌ای (ضد SQLITE_BUSY) + Job Object ضدزامبی (ریشه‌ی باگ ۳۶ — قفل فایل‌ها هنگام آپدیت)
 /// </summary>
 public partial class App : Application
 {
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+
+        // ✨ v3.5 (اصلاح P0-۲ بازبینی): جلوگیری از اجرای همزمان دو نسخه —
+        // دو نویسنده‌ی همزمان SQLite یعنی SQLITE_BUSY و داده‌ی گم‌شده
+        if (!WindowsProcessGuard.EnsureSingleInstance())
+        {
+            MessageBox.Show(
+                "بازارسنج از قبل در حال اجراست!\n\n" +
+                "اجرا‌ی همزمان دو نسخه به دیتابیس آسیب می‌زند.\n" +
+                "لطفاً از نسخه‌ی باز‌شده در تسک‌بار استفاده کنید.",
+                "بازارسنج", MessageBoxButton.OK, MessageBoxImage.Information);
+            Shutdown(0);
+            return;
+        }
+
+        // ✨ v3.5 (اصلاح P0-۳ بازبینی): ریشه‌کنی پروسسه‌های زامبی node/chrome —
+        // با خروج برنامه (حتی کرش) ویندوز همه‌ی فرزندان را می‌کشد؛
+        // دیگر فایلی برای آپدیت خودکار قفل نمی‌ماند
+        WindowsProcessGuard.AttachKillOnCloseJob();
 
         DispatcherUnhandledException += App_DispatcherUnhandledException;
         TaskScheduler.UnobservedTaskException += App_UnobservedTaskException;
@@ -99,9 +118,12 @@ public partial class App : Application
         return best;
     }
 
-    /// <summary>مسیر کامل فایل لاگ برای نمایش به کاربر</summary>
-    internal static string LogPath =>
-        System.IO.Path.Combine(AppContext.BaseDirectory, "error_log.txt");
+    /// <summary>
+    /// مسیر واقعی فایل لاگ — ✨ v3.5 (اصلاح P0-۵ بازبینی):
+    /// اگر پوشه‌ی برنامه فقط-خواندنی باشد، Logger خودش به APPDATA پناه می‌برد؛
+    /// اینجا هم باید همان مسیر واقعی نشان داده شود، نه همیشه مسیر کنار exe
+    /// </summary>
+    internal static string LogPath => Services.Logger.LogFilePath;
 
     /// <summary>
     /// نمایش خطا + تصمیم درباره ادامه کار:

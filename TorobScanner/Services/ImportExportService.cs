@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
+using System.Text;
 using OfficeOpenXml;
 using TorobScanner.Models;
 
@@ -85,5 +87,43 @@ public class ImportExportService
         }
         ws.Cells.AutoFitColumns(0);
         package.Save();
+    }
+
+    /// <summary>
+    /// ✨ v3.5 — خروجی CSV (قابلیت ۱۳ بازبینی):
+    /// سازگار با Excel فارسی و همه‌ی نرم‌افزارهای صفحه‌گسترده —
+    /// • UTF-8 با BOM (اگر BOM نباشد اکسل فارسی را mojibake نشان می‌دهد)
+    /// • نقل‌قول استاندارد RFC 4180 برای فیلدهای حاوی ویرگول/گیومه/خط جدید
+    ///   (اسم‌های فارسی خیلی رایج ویرگول دارند — بدون نقل‌قول ستون‌ها به‌هم می‌ریخت)
+    /// • اعداد با نقطه‌ی انگلیسی ثابت تا هر ناحیه‌ی regional درست بخواند
+    /// </summary>
+    public void ExportToCsv(List<SavedProduct> data, string filePath)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("نام محصول,کمترین قیمت (تومان),قیمت قبلی,تغییر قیمت,فروشگاه,دسته‌بندی,تاریخ بروزرسانی,لینک");
+
+        foreach (var item in data)
+        {
+            sb.AppendLine(string.Join(",",
+                CsvField(item.ProductName),
+                item.LastPrice.ToString("0", CultureInfo.InvariantCulture),
+                item.PreviousPrice.ToString("0", CultureInfo.InvariantCulture),
+                item.PriceDelta.ToString("0", CultureInfo.InvariantCulture),
+                CsvField(item.StoreName),
+                CsvField(item.CategoryName),
+                item.LastUpdate.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture),
+                CsvField(item.TorobUrl)));
+        }
+
+        File.WriteAllText(filePath, sb.ToString(), new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
+    }
+
+    /// <summary>فرار استاندارد فیلد CSV طبق RFC 4180</summary>
+    private static string CsvField(object? value)
+    {
+        var s = value?.ToString() ?? "";
+        if (s.Contains(',') || s.Contains('"') || s.Contains('\n') || s.Contains('\r'))
+            s = "\"" + s.Replace("\"", "\"\"") + "\"";
+        return s;
     }
 }

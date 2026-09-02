@@ -1593,9 +1593,12 @@ public partial class MainWindow : Window
 
         try
         {
+            // ✨ v3.5 (قابلیت ۱۲ بازبینی): خلاصه‌ی آماری بروزرسانی — مدت + تعداد
+            var sw = System.Diagnostics.Stopwatch.StartNew();
             await Task.Run(() => _scraper.RefreshProductsAsync(productsToUpdate, progress, _cts.Token));
-            _statusText.Text = "بروزرسانی با موفقیت کامل شد.";
-            ShowToast("بروزرسانی کامل شد", "⟳");
+            sw.Stop();
+            _statusText.Text = LuxUI.Fa($"بروزرسانی کامل شد — {productsToUpdate.Count} محصول در {sw.Elapsed.TotalSeconds:0} ثانیه");
+            ShowToast(LuxUI.Fa($"بروزرسانی کامل شد — {productsToUpdate.Count} محصول در {sw.Elapsed.TotalSeconds:0} ثانیه"), "⟳");
         }
         catch (OperationCanceledException)
         {
@@ -1642,6 +1645,8 @@ public partial class MainWindow : Window
             });
 
             List<SavedProduct> scannedProducts;
+            // ✨ v3.5 (قابلیت ۱۲ بازبینی): زمان‌سنج برای خلاصه‌ی آماری پایان اسکن
+            var sw = System.Diagnostics.Stopwatch.StartNew();
             try
             {
                 scannedProducts = await Task.Run(() =>
@@ -1687,10 +1692,12 @@ public partial class MainWindow : Window
                 }
             }
 
+            sw.Stop();
             EndBusyState();
 
-            _statusText.Text = LuxUI.Fa($"اسکن کامل شد. {scannedProducts.Count} محصول بررسی شد.");
-            ShowToast(LuxUI.Fa($"اسکن کامل شد — {scannedProducts.Count} محصول بررسی شد"), "◈");
+            // ✨ v3.5: خلاصه‌ی آماری اسکن — نام سایت + جدیدها + کل + مدت (فقط لایه UI؛ موتور اسکن دست نخورده)
+            _statusText.Text = LuxUI.Fa($"اسکن {scraper.SiteName} کامل شد — {newProducts.Count} جدید از {scannedProducts.Count} محصول در {sw.Elapsed.TotalSeconds:0} ثانیه");
+            ShowToast(LuxUI.Fa($"اسکن {scraper.SiteName} کامل شد — {newProducts.Count} جدید از {scannedProducts.Count} محصول در {sw.Elapsed.TotalSeconds:0} ثانیه"), "◈");
             _ = LoadProductsAsync(animate: false);
             RefreshActiveCompareTab();
 
@@ -1786,18 +1793,27 @@ public partial class MainWindow : Window
     private async void ExportLinks_Click(object sender, RoutedEventArgs e)
     {
         if (!_filteredProducts.Any()) { MessageBox.Show(this, "محصولی برای خروجی گرفتن نیست."); return; }
-        var dialog = new SaveFileDialog { Filter = "فایل اکسل|*.xlsx", FileName = $"گزارش_قیمت_{_currentFilter}.xlsx" };
+        // ✨ v3.5 (قابلیت ۱۳ بازبینی): خروجی CSV کنار اکسل — سازگار با همه‌ی نرم‌افزارها
+        var dialog = new SaveFileDialog
+        {
+            Filter = "فایل اکسل|*.xlsx|فایل CSV (سازگار با همه‌جا)|*.csv",
+            FileName = $"گزارش_قیمت_{_currentFilter}.xlsx"
+        };
         if (dialog.ShowDialog() == true)
         {
             try
             {
-                // ✨ v2.7 پرفورمنس: ساخت اکسل روی رشته‌ی کارگر — لیست‌های بزرگ UI را قفل نمی‌کنند
-                _statusText.Text = "در حال ساخت فایل اکسل...";
+                // ✨ v2.7 پرفورمنس: ساخت فایل روی رشته‌ی کارگر — لیست‌های بزرگ UI را قفل نمی‌کنند
+                bool asCsv = dialog.FileName.EndsWith(".csv", StringComparison.OrdinalIgnoreCase);
+                _statusText.Text = asCsv ? "در حال ساخت فایل CSV..." : "در حال ساخت فایل اکسل...";
                 var products = _filteredProducts.ToList();
                 var filePath = dialog.FileName;
-                await Task.Run(() => _importService.ExportToExcel(products, filePath));
+                if (asCsv)
+                    await Task.Run(() => _importService.ExportToCsv(products, filePath));
+                else
+                    await Task.Run(() => _importService.ExportToExcel(products, filePath));
                 _statusText.Text = "سیستم آماده است.";
-                ShowToast("فایل اکسل با موفقیت ساخته شد", "↥");
+                ShowToast(asCsv ? "فایل CSV با موفقیت ساخته شد" : "فایل اکسل با موفقیت ساخته شد", "↥");
             }
             catch (Exception ex)
             {

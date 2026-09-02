@@ -44,6 +44,12 @@ public class DatabaseManager
             using (var pragma = new SqliteCommand("PRAGMA journal_mode=WAL;", connection))
                 pragma.ExecuteNonQuery();
 
+            // ✨ v3.5 (اصلاح P2 بازبینی): WAL + synchronous=NORMAL —
+            // ترکیب رسمی توصیه‌شده SQLite برای کارایی نوشتن بدون به‌خطر انداختن داده
+            // (fsync کامل فقط در چک‌پوینت WAL انجام می‌شود؛ در کرش برق هم WAL سالم می‌ماند)
+            using (var pragmaSync = new SqliteCommand("PRAGMA synchronous=NORMAL;", connection))
+                pragmaSync.ExecuteNonQuery();
+
             string tableCategories = "CREATE TABLE IF NOT EXISTS Categories (Name TEXT PRIMARY KEY);";
             string tableProducts = @"
                 CREATE TABLE IF NOT EXISTS SavedProducts (
@@ -75,6 +81,14 @@ public class DatabaseManager
                 );
                 CREATE INDEX IF NOT EXISTS idx_compareitems_group ON CompareItems(GroupId);";
             using (var cmd4 = new SqliteCommand(tableCompare, connection)) cmd4.ExecuteNonQuery();
+
+            // ✨ v3.5 (اصلاح P0-۱ بازبینی — باگ ۳۷): پاک‌سازی لینک‌های مقایسه‌ی یتیمِ قدیمی —
+            // حذف محصول تا امروز CompareItems آن را جا می‌گذاشت؛ نتیجه: شمارنده‌ی اعضای گروه
+            // در تب مقایسه محصولِ حذف‌شده را هم حساب می‌کرد ولی خودش نشان داده نمی‌شد.
+            // این پاک‌سازی idempotent است و هر بار استارت‌آپ اجرا می‌شود (خرابی داده‌های قبلی را هم ترمیم می‌کند)
+            using (var cmd5 = new SqliteCommand(
+                "DELETE FROM CompareItems WHERE ProductId NOT IN (SELECT Id FROM SavedProducts);", connection))
+                cmd5.ExecuteNonQuery();
         }
         catch (DllNotFoundException ex) when (IsNativeMissing(ex))
         {
@@ -233,9 +247,24 @@ public class DatabaseManager
     {
         using var connection = new SqliteConnection(_connectionString);
         connection.Open();
-        using var cmd = new SqliteCommand("DELETE FROM SavedProducts WHERE CategoryName=@Name", connection);
-        cmd.Parameters.AddWithValue("@Name", name);
-        cmd.ExecuteNonQuery();
+        // ✨ v3.5 (باگ ۳۷): لینک‌های مقایسه‌ی محصولات این دسته هم پاک می‌شوند — نه یتیم
+        using var tx = connection.BeginTransaction();
+        try
+        {
+            using (var cmd1 = new SqliteCommand(
+                "DELETE FROM CompareItems WHERE ProductId IN (SELECT Id FROM SavedProducts WHERE CategoryName=@Name);", connection, tx))
+            {
+                cmd1.Parameters.AddWithValue("@Name", name);
+                cmd1.ExecuteNonQuery();
+            }
+            using (var cmd2 = new SqliteCommand("DELETE FROM SavedProducts WHERE CategoryName=@Name", connection, tx))
+            {
+                cmd2.Parameters.AddWithValue("@Name", name);
+                cmd2.ExecuteNonQuery();
+            }
+            tx.Commit();
+        }
+        catch { tx.Rollback(); throw; }
     }
 
     public List<SavedProduct> GetAllProducts()
@@ -447,8 +476,23 @@ public class DatabaseManager
     {
         using var connection = new SqliteConnection(_connectionString);
         connection.Open();
-        using var cmd = new SqliteCommand("DELETE FROM SavedProducts WHERE Id=@Id", connection);
-        cmd.Parameters.AddWithValue("@Id", id);
-        cmd.ExecuteNonQuery();
+        // ✨ v3.5 (باگ ۳۷): لینک‌های مقایسه‌ی همین محصول هم حذف می‌شوند —
+        // شمارنده‌ی اعضای گروه دیگر محصول حذف‌شده را نمی‌شمارد
+        using var tx = connection.BeginTransaction();
+        try
+        {
+            using (var cmd1 = new SqliteCommand("DELETE FROM CompareItems WHERE ProductId=@Id", connection, tx))
+            {
+                cmd1.Parameters.AddWithValue("@Id", id);
+                cmd1.ExecuteNonQuery();
+            }
+            using (var cmd2 = new SqliteCommand("DELETE FROM SavedProducts WHERE Id=@Id", connection, tx))
+            {
+                cmd2.Parameters.AddWithValue("@Id", id);
+                cmd2.ExecuteNonQuery();
+            }
+            tx.Commit();
+        }
+        catch { tx.Rollback(); throw; }
     }
 }
