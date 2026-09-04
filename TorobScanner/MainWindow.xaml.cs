@@ -395,7 +395,10 @@ public partial class MainWindow : Window
             Margin = new Thickness(10, 0, 0, 0)
         };
         brand.Children.Add(brandTitle);
-        var verChip = LuxUI.Pill("۳.۲.۰", new SolidColorBrush(Tint(LuxUI.Accent, 0x24)),
+        // ✨ v3.5.1 fix: چیپ نسخه قبلاً هاردکد بود («۳.۲.۰») و با هر bump نسخه، تایتل‌بار
+        // عدد قدیمی نشان می‌داد. اکنون مستقیم از AssemblyVersion اسمبلی خوانده می‌شود —
+        // همان منبعی که موتور بروزرسانی مقایسه می‌کند؛ پس هیچ‌وقت از نسخه واقعی جا نمی‌ماند.
+        var verChip = LuxUI.Pill(LuxUI.Fa(UpdateService.CurrentVersion()), new SolidColorBrush(Tint(LuxUI.Accent, 0x24)),
             LuxUI.Accent, 9.5);
         verChip.Margin = new Thickness(10, 0, 0, 0);
         verChip.VerticalAlignment = VerticalAlignment.Center;
